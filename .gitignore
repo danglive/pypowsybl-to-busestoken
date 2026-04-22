@@ -14,7 +14,9 @@ dist/
 *.egg-info/
 
 .ipynb_checkpoints/
-notebooks/
+notebooks/*
+!notebooks/
+!notebooks/busestoken_demo.ipynb
 output/
 docs/
 GraphGPS/
@@ -23,6 +25,7 @@ paper/
 rex/
 
 *.ipynb
+!notebooks/busestoken_demo.ipynb
 *.html
 *.png
 *.json
