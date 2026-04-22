@@ -15,6 +15,95 @@ The package turns an operational network state into:
 No operational dataset is included in this repository. Tests use public IEEE
 networks created by PyPowSyBl or synthetic tensors.
 
+## Converter Overview
+
+The converter treats one solved network snapshot as a typed graph: buses become
+tokens, active branches become relations, and each relation keeps both endpoint
+indices and physical attributes.
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {
+  "fontFamily": "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+  "primaryColor": "#eef6ff",
+  "primaryTextColor": "#102a43",
+  "primaryBorderColor": "#2f80c0",
+  "lineColor": "#5b6673",
+  "clusterBkg": "#fbfcfe",
+  "clusterBorder": "#d7e0ea"
+}}}%%
+graph TB
+    X["XIIDM / PyPowSyBl Network<br/>topology, AC state, injections, limits"]:::source
+    LF["Optional AC load-flow<br/>OpenLoadFlow or configured provider"]:::process
+    SNAP["Solved snapshot<br/>N-0 operating state"]:::snapshot
+
+    BUSES["network.get_buses()<br/>voltage magnitude, angle, nominal voltage"]:::pyps
+    INJ["Generators / loads / shunts / batteries<br/>aggregated by bus"]:::pyps
+    BRANCHES["network.get_branches()<br/>lines + two-winding transformers"]:::pyps
+    LIMITS["network.get_operational_limits()<br/>permanent CURRENT limits"]:::pyps
+
+    BUSDF["bus_df<br/>one row per active bus"]:::bus
+    RELDF["relation_df<br/>one row per active branch relation"]:::rel
+    EDGEIDX["relation_index / edge_index<br/>shape = [2, E]"]:::idx
+
+    XT["token_features<br/>x_bus: [N, F_bus]"]:::tensor
+    EA["relation_features<br/>edge_attr: [E, F_edge]"]:::tensor
+    EI["sparse relation indices<br/>src/dst bus ids for sparse attention"]:::tensor
+
+    ML["Graph ML input contract<br/>variable N buses, variable E relations, fixed feature schema"]:::model
+
+    X --> LF --> SNAP
+    X -. "if already solved" .-> SNAP
+
+    SNAP --> BUSES --> BUSDF
+    SNAP --> INJ --> BUSDF
+    SNAP --> BRANCHES --> RELDF
+    SNAP --> LIMITS --> RELDF
+    BRANCHES --> EDGEIDX
+
+    BUSDF --> XT
+    RELDF --> EA
+    EDGEIDX --> EI
+
+    XT --> ML
+    EA --> ML
+    EI --> ML
+
+    subgraph "Bus tokens"
+      BUSDF
+      XT
+    end
+
+    subgraph "Branch relations"
+      RELDF
+      EA
+    end
+
+    subgraph "Sparse topology"
+      EDGEIDX
+      EI
+    end
+
+    classDef source fill:#eef6ff,stroke:#2775b6,stroke-width:1.5px,color:#102a43;
+    classDef process fill:#fff6df,stroke:#c98600,stroke-width:1.5px,color:#402b00;
+    classDef snapshot fill:#f0f4ff,stroke:#4f6bdc,stroke-width:1.5px,color:#202a55;
+    classDef pyps fill:#f7f9fb,stroke:#8994a3,stroke-width:1px,color:#28323d;
+    classDef bus fill:#ecf8f0,stroke:#219653,stroke-width:1.5px,color:#12351f;
+    classDef rel fill:#fff1e8,stroke:#d36b2c,stroke-width:1.5px,color:#4a2410;
+    classDef idx fill:#f4efff,stroke:#7b3fb2,stroke-width:1.5px,color:#34134f;
+    classDef tensor fill:#e8f3ff,stroke:#2f80c0,stroke-width:1.5px,color:#12324a;
+    classDef model fill:#e9f7ef,stroke:#1f9d55,stroke-width:2px,color:#12351f;
+```
+
+This representation does not require a fixed number of buses or branches. A
+large transmission grid, a small IEEE test case, or an operational snapshot with
+temporary topology changes all map to the same contract:
+
+```text
+x_bus     : N x F_bus    bus-level physical state
+edge_attr : E x F_edge   branch-level physical relation attributes
+edge_index: 2 x E        sparse active topology
+```
+
 ## Installation
 
 ```shell
