@@ -229,6 +229,28 @@ matches a physical quantity:
 | N-0 loading ratio `base_rho` | robust scaling with an upper clip | Keeps `I/PATL` as the loading signal while reducing outlier influence. |
 | Binary flags | identity | Topology/device indicators remain explicit 0/1 signals. |
 
+### Synchronized Bus/Edge Scaling Contract
+
+The normalisation is applied consistently to the two numerical parts of the
+graph representation:
+
+```text
+bus_df       -> BusesTokenScaler -> x_bus      (scaled bus state)
+relation_df  -> BusesTokenScaler -> edge_attr  (scaled branch relation state)
+edge_index   -> unchanged        -> edge_index (integer sparse topology)
+```
+
+This distinction is important. `edge_attr` contains physical branch quantities
+used by edge-conditioned message passing or attention, so it is normalised with
+the same physics-informed contract as the bus tokens. `edge_index`, however, is
+not a physical magnitude. It is the sparse active-topology index, so it remains
+an integer connectivity tensor.
+
+The scaler is fitted only on the training split and then reused unchanged for
+validation, test, and inference snapshots. It must not be fitted independently
+per snapshot: doing so would change the operational meaning of the scaled
+features and could leak distribution information across time-aware splits.
+
 Typical usage:
 
 ```python
